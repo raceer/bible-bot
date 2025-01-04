@@ -1,4 +1,6 @@
 .env
 *.key
 *.pem
-plan/
+*plan/
+
+*__pycache__*
