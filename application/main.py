@@ -2,17 +2,27 @@ import os, asyncio
 from dotenv import load_dotenv
 from counter import *
 from telegram_bot import *
+import telegram
 
-def main():
+async def main():
     load_dotenv()
     telegram_bot_api = os.getenv("TELEGRAM_API")
 
-    app = ApplicationBuilder().token(telegram_bot_api).build()
+    bot = telegram.Bot(telegram_bot_api)
+    async with bot:
+        # print(await bot.get_me())
+        updates = (await bot.get_updates())
+        # print(updates)
+        for message in updates:
+            print(message.message.text)
 
-    app.add_handler(CommandHandler("start", command_start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_answer))
+        print(message.message)
+        user = message.message.from_user.username
+        id = message.message.from_user.id
+        await bot.send_message(text=f"Hi, {user}!", chat_id=id)
 
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+        
+        
 
 async def command_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -25,4 +35,4 @@ async def message_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text("A")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
