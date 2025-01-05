@@ -1,38 +1,43 @@
-import os, asyncio
+import logging
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from dotenv import load_dotenv
-from counter import *
-from telegram_bot import *
-import telegram
+import os
 
-async def main():
-    load_dotenv()
-    telegram_bot_api = os.getenv("TELEGRAM_API")
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-    bot = telegram.Bot(telegram_bot_api)
-    async with bot:
-        # print(await bot.get_me())
-        updates = (await bot.get_updates())
-        # print(updates)
-        for message in updates:
-            print(message.message.text)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
 
-        print(message.message)
-        user = message.message.from_user.username
-        id = message.message.from_user.id
-        await bot.send_message(text=f"Hi, {user}!", chat_id=id)
-
-        
-        
-
-async def command_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    await update.message.reply_html(
-        rf"Hi {user.mention_html()}!",
-        reply_markup=ForceReply(selective=True),
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
+    
+async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, 
+    text="""
+    Commands:
+    /help - help
+    /start - start
+    """
     )
 
-async def message_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("A")
+def main():
+    load_dotenv()
+    telegram_bot_api_token = os.getenv("TELEGRAM_API")
+    application = ApplicationBuilder().token(telegram_bot_api_token).build()
+    
+    start_handler = CommandHandler('start', start)
+    help_hanlder = CommandHandler("help", help)
+    message_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, echo)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    application.add_handler(start_handler)
+    application.add_handler(help_hanlder)
+    application.add_handler(message_handler)
+    
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
