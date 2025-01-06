@@ -1,32 +1,43 @@
-from telegram import (
-    ForceReply, 
-    Update
-)
+from dotenv import load_dotenv
+import os
+
+from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters
+    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 )
 
-class TeleBot:
-    def __init__(self, telegram_bot_api):
-        self.app = ApplicationBuilder().token(telegram_bot_api).build()
+class TelegramBot:
+    def __init__(self, token: str):
+        self.token = token
+        self.application = ApplicationBuilder().token(self.token).build()
 
-        self.app.add_handler(CommandHandler("start", self.command_start))
-        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.message_answer))
+        # Add command handlers
+        self.application.add_handler(CommandHandler('start', self.start))
+        self.application.add_handler(CommandHandler('help', self.help_command))
 
-    async def command_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        user = update.effective_user
-        await update.message.reply_html(
-            rf"Hi {user.mention_html()}!",
-            reply_markup=ForceReply(selective=True),
-        )
+        # Add a message handler for general text
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.echo))
 
-    async def message_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await update.message.reply_text("A")
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle the /start command."""
+        await update.message.reply_text("Hello! Welcome to the bot. How can I assist you?")
 
-    async def run_bot(self):
-        self.app.run_polling(allowed_updates=Update.ALL_TYPES)
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle the /help command."""
+        await update.message.reply_text("Here are the commands you can use:\n/start - Start the bot\n/help - Get help")
 
+    async def echo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Echo back the user's message."""
+        await update.message.reply_text(f"You said: {update.message.text}")
+
+    def run(self):
+        """Run the bot."""
+        print("Bot is running...")
+        self.application.run_polling()
+
+# Usage
+if __name__ == "__main__":
+    load_dotenv()
+    telegram_bot_api_token = os.getenv("TELEGRAM_API")
+    bot = TelegramBot(telegram_bot_api_token)
+    bot.run()
