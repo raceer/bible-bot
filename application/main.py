@@ -1,43 +1,128 @@
+#!/usr/bin/env python
+# pylint: disable=unused-argument
+# This program is dedicated to the public domain under the CC0 license.
+
+"""
+Simple Bot to send timed Telegram messages.
+
+This Bot uses the Application class to handle the bot and the JobQueue to send
+timed messages.
+
+First, a few handler functions are defined. Then, those functions are passed to
+the Application and registered at their respective places.
+Then, the bot is started and runs until we press Ctrl-C on the command line.
+
+Usage:
+Basic Alarm Bot example, sends a message after a set time.
+Press Ctrl-C on the command line or send a signal to the process to stop the
+bot.
+
+Note:
+To use the JobQueue, you must install PTB via
+`pip install "python-telegram-bot[job-queue]"`
+"""
+
 import logging
+
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes
 from dotenv import load_dotenv
 import os
+from counter import Counter
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# Enable logging
+# logging.basicConfig(
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+# )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
+# Define a few command handlers. These usually take the two arguments update and
+# context.
+# Best practice would be to replace context with an underscore,
+# since context is an unused local variable.
+# This being an example and not having context present confusing beginners,
+# we decided to have it present as context.
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends explanation on how to use the bot."""
+    await update.message.reply_text("Hi! Use /set <seconds> to set a timer")
+
+
+async def alarm(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the alarm message."""
+    job = context.job
+    data = counters[str(job.chat_id)].retrieve_value()
+    await context.bot.send_message(job.chat_id, text=f"Beep! {data} seconds are over!")
+
+
+def remove_job_if_exists(name: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Remove job with given name. Returns whether job was removed."""
+    current_jobs = context.job_queue.get_jobs_by_name(name)
+    print(current_jobs)
+    if not current_jobs:
+        return False
+    for job in current_jobs:
+        job.schedule_removal()
+    return True
+
+async def my_alarm(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the alarm message."""
+    job = context.job
+    await context.bot.send_message(job.chat_id, text=f"Beep! {job.data}")
+
+async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Add a job to the queue."""
+    global counters
+    chat_id = update.effective_message.chat_id
+    counters = {}
+    chat_id_str = str(chat_id)
+    if chat_id not in counters:
+        counters[chat_id_str] = Counter()
     
-async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, 
-    text="""
-    Commands:
-    /help - help
-    /start - start
-    """
-    )
+    try:
+        # args[0] should contain the time for the timer in seconds
+        due = float(context.args[0])
+        if due < 0:
+            await update.effective_message.reply_text("Sorry we can not go back to future!")
+            return
 
-def main():
+        # print(counters[chat_id_str])
+        job_removed = remove_job_if_exists(str(chat_id), context)
+        # context.job_queue.run_once(alarm, due, chat_id=chat_id, name=str(chat_id), data=due)
+        context.job_queue.run_repeating(alarm, due, chat_id=chat_id, name=str(chat_id), data=counters[chat_id_str].retrieve_value())
+        # context.job_queue.run_daily(alarm, 5, chat_id=chat_id, name=str(chat_id), data=counter.re)
+
+        text = "Timer successfully set!"
+        if job_removed:
+            text += " Old one was removed."
+        await update.effective_message.reply_text(text)
+
+    except (IndexError, ValueError):
+        await update.effective_message.reply_text("Usage: /set <seconds>")
+
+
+async def unset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove the job if the user changed their mind."""
+    chat_id = update.message.chat_id
+    job_removed = remove_job_if_exists(str(chat_id), context)
+    text = "Timer successfully cancelled!" if job_removed else "You have no active timer."
+    await update.message.reply_text(text)
+
+
+def main() -> None:
+    """Run bot."""
+    # Create the Application and pass it your bot's token.
     load_dotenv()
     telegram_bot_api_token = os.getenv("TELEGRAM_API")
-    application = ApplicationBuilder().token(telegram_bot_api_token).build()
-    
-    start_handler = CommandHandler('start', start)
-    help_hanlder = CommandHandler("help", help)
-    message_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, echo)
+    application = Application.builder().token(telegram_bot_api_token).build()
 
-    application.add_handler(start_handler)
-    application.add_handler(help_hanlder)
-    application.add_handler(message_handler)
-    
-    application.run_polling()
+    # on different commands - answer in Telegram
+    application.add_handler(CommandHandler(["start", "help"], start))
+    application.add_handler(CommandHandler("set", set_timer))
+    application.add_handler(CommandHandler("unset", unset))
 
-if __name__ == '__main__':
+    # Run the bot until the user presses Ctrl-C
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+if __name__ == "__main__":
     main()

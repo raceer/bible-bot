@@ -1,5 +1,5 @@
 class Counter:
-    def __main__(self):
+    def __init__(self):
         self.default_value = 0
         self.counter = self.default_value
 
@@ -9,3 +9,9 @@ class Counter:
 
     def reset_counter(self):
         self.counter = self.default_value
+
+
+if __name__ == "__main__":
+    count = Counter()
+    print(count.retrieve_value())
+    print(count.retrieve_value())
