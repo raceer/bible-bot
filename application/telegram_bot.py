@@ -1,10 +1,10 @@
-from dotenv import load_dotenv
-import os
-
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 )
+
+from dotenv import load_dotenv
+import os
 
 class TelegramBot:
     def __init__(self, token: str):
