@@ -78,7 +78,12 @@ class BibleBot:
         """Send the alarm message."""
         job = context.job
         data = self.counters[str(job.chat_id)].retrieve_value()
-        await context.bot.send_message(job.chat_id, text=f"{data}")
+        if data > 10:
+            self.counters[str(job.chat_id)].reset_counter()
+            await context.bot.send_message(job.chat_id, text="Timer is above limit, quitting.")
+            self.remove_job_if_exists(str(job.chat_id), context)
+        else:
+            await context.bot.send_message(job.chat_id, text=f"{data}")
 
     def run(self):
         """Run the bot."""
