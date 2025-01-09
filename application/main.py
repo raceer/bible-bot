@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 import os
 
 from counter import Counter
+from sqlite_manager import DatabaseManager
 
 class BibleBot:
-    def __init__(self, token: str):
+    def __init__(self, token: str, database_path):
         self.token = token
         self.application = ApplicationBuilder().token(self.token).build()
 
@@ -22,8 +23,9 @@ class BibleBot:
         # Add a message handler for general text
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.echo))
 
+        self.user_db = DatabaseManager(database_path)
         self.counters = {}
-
+    
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle the /start command."""
         await update.message.reply_text("Hello! Welcome to the bot. How can I assist you?")
@@ -47,8 +49,11 @@ class BibleBot:
     async def set_timer(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = update.effective_message.chat_id
         chat_id_str = str(chat_id)
+
+        self.user_db.add_user(chat_id)
         if chat_id not in self.counters:
-            self.counters[chat_id_str] = Counter()
+            self.counters[chat_id_str] = Counter(0, self.user_db.get_score(chat_id))
+
         
         try:
             due = float(context.args[0])
@@ -77,9 +82,13 @@ class BibleBot:
     async def alarm(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send the alarm message."""
         job = context.job
+        chat_id = job.chat_id
         data = self.counters[str(job.chat_id)].retrieve_value()
-        if data > 10:
+        self.user_db.update_score(chat_id, data)
+        timer_limit = 10
+        if data > timer_limit:
             self.counters[str(job.chat_id)].reset_counter()
+            self.user_db.update_score(chat_id, self.counters[str(chat_id)].retrieve_value())
             await context.bot.send_message(job.chat_id, text="Timer is above limit, quitting.")
             self.remove_job_if_exists(str(job.chat_id), context)
         else:
@@ -93,5 +102,5 @@ class BibleBot:
 if __name__ == "__main__":
     load_dotenv()
     telegram_bot_api_token = os.getenv("TELEGRAM_API")
-    bot = BibleBot(telegram_bot_api_token)
+    bot = BibleBot(telegram_bot_api_token, "cache/user_data.db")
     bot.run()
