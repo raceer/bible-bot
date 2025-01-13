@@ -11,10 +11,6 @@ class DatabaseManager:
         self.cursor.execute("BEGIN;")
 
         self.cursor.execute("""
-        DROP TABLE IF EXISTS Counters
-        """)
-
-        self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS Counters (
         chat_id INTEGER PRIMARY KEY,
         score INTEGER DEFAULT 0
@@ -41,6 +37,8 @@ class DatabaseManager:
         self.cursor.execute("""
         UPDATE Counters SET score = ? WHERE chat_id = ?""",
         [score, chat_id])
+
+        self.cursor.execute("COMMIT;")
 
 if __name__ == "__main__":
     db = DatabaseManager("cache/user_data.db")

@@ -54,7 +54,6 @@ class BibleBot:
         if chat_id not in self.counters:
             self.counters[chat_id_str] = Counter(0, self.user_db.get_score(chat_id))
 
-        
         try:
             due = float(context.args[0])
             if due < 0:
