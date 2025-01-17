@@ -1,8 +1,0 @@
-.env
-*.key
-*.pem
-*plan/
-
-*__pycache__*
-cache/
-.research/
