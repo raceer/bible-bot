@@ -4,10 +4,11 @@ from telegram.ext import (
 )
 
 from dotenv import load_dotenv
-import os
+import os, datetime
+from pytz import timezone
 
-from counter import Counter
 from sqlite_manager import DatabaseManager
+from bible import BibleSearch
 
 class BibleBot:
     def __init__(self, token: str, database_path):
@@ -24,7 +25,7 @@ class BibleBot:
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.echo))
 
         self.user_db = DatabaseManager(database_path)
-        self.counters = {}
+        self.bible_search = BibleSearch()
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle the /start command."""
@@ -51,25 +52,28 @@ class BibleBot:
         chat_id_str = str(chat_id)
 
         self.user_db.add_user(chat_id)
-        if chat_id not in self.counters:
-            self.counters[chat_id_str] = Counter(0, self.user_db.get_score(chat_id))
-
+        
         try:
             due = float(context.args[0])
             if due < 0:
                 await update.effective_message.reply_text("Sorry we can not go back to future!")
                 return
 
-            job_removed = self.remove_job_if_exists(chat_id_str, context)
-            context.job_queue.run_repeating(self.alarm, due, chat_id=chat_id, name=chat_id_str, data=self.counters[chat_id_str].retrieve_value())
+            hours = int(context.args[0])
+            minutes = int(0 if len(context.args) < 2 else context.args[1])
+            scheduled_time = datetime.time(hours, minutes)
 
-            text = "Timer successfully set!"
+            job_removed = self.remove_job_if_exists(chat_id_str, context)
+            context.job_queue.run_daily(self.alarm, scheduled_time, chat_id=chat_id, name=chat_id_str)
+
+            text = f"Timer successfully set on {scheduled_time}!"
             if job_removed:
                 text += " Old one was removed."
             await update.effective_message.reply_text(text)
 
         except (IndexError, ValueError):
-            await update.effective_message.reply_text("Usage: /set <seconds>")
+            # await update.effective_message.reply_text("Usage: /set <seconds>")
+            await update.effective_message.reply_text("Usage: /set <hours> [<minutes>]")
 
     async def unset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Remove the job if the user changed their mind."""
@@ -82,21 +86,20 @@ class BibleBot:
         """Send the alarm message."""
         job = context.job
         chat_id = job.chat_id
-        data = self.counters[str(job.chat_id)].retrieve_value()
-        self.user_db.update_score(chat_id, data)
+        data = self.user_db.get_score(chat_id)
+        self.user_db.update_score(chat_id, data+1)
         timer_limit = 10
         if data > timer_limit:
-            self.counters[str(job.chat_id)].reset_counter()
-            self.user_db.update_score(chat_id, self.counters[str(chat_id)].retrieve_value())
+            self.user_db.update_score(chat_id, 0)
             await context.bot.send_message(job.chat_id, text="Timer is above limit, quitting.")
             self.remove_job_if_exists(str(job.chat_id), context)
         else:
-            await context.bot.send_message(job.chat_id, text=f"{data}")
+            await context.bot.send_message(job.chat_id, text=self.bible_search.get_random_verse())
 
     def run(self):
         """Run the bot."""
         print("Bot is running...")
-        self.application.run_polling()
+        self.application.run_polling(timeout=60)
 
 if __name__ == "__main__":
     load_dotenv()

@@ -17,6 +17,13 @@ class DatabaseManager:
         );
         """)
 
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Timezones (
+        chat_id INTEGER PRIMARY KEY,
+        timezone INTEGER DEFAULT 0
+        );
+        """)
+
         self.cursor.execute("COMMIT;")
 
     def add_user(self, chat_id, score = 0):
