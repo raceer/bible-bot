@@ -19,6 +19,7 @@ class BibleBot:
         self.application.add_handler(CommandHandler('start', self.start))
         self.application.add_handler(CommandHandler('help', self.help_command))
         self.application.add_handler(CommandHandler('set', self.set_timer))
+        self.application.add_handler(CommandHandler('timezone', self.set_timezone))
         self.application.add_handler(CommandHandler(['unset', 'stop'], self.unset))
 
         # Add a message handler for general text
@@ -63,10 +64,18 @@ class BibleBot:
             minutes = int(0 if len(context.args) < 2 else context.args[1])
             scheduled_time = datetime.time(hours, minutes)
 
+            diff_h, diff_m, diff_s = map(int, (self.user_db.tz_get(chat_id)).split(":"))
+            diff = datetime.timedelta(hours=diff_h, minutes=diff_m, seconds=diff_s)
+            today = datetime.datetime.combine(datetime.date.today(), scheduled_time)
+
+            today -= diff
+            og_scheduled_time = scheduled_time
+            scheduled_time = today.time()
+
             job_removed = self.remove_job_if_exists(chat_id_str, context)
             context.job_queue.run_daily(self.alarm, scheduled_time, chat_id=chat_id, name=chat_id_str)
 
-            text = f"Timer successfully set on {scheduled_time}!"
+            text = f"Timer successfully set on {og_scheduled_time}!"
             if job_removed:
                 text += " Old one was removed."
             await update.effective_message.reply_text(text)
@@ -81,6 +90,18 @@ class BibleBot:
         job_removed = self.remove_job_if_exists(str(chat_id), context)
         text = "Timer successfully cancelled!" if job_removed else "You have no active timer."
         await update.message.reply_text(text)
+
+    async def set_timezone(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_message.chat_id
+        try:
+            self.user_db.add_user(chat_id)
+            tz = context.args[0]
+            tz = timezone(tz)
+            diff = datetime.datetime.now(tz).utcoffset()
+            self.user_db.tz_update(chat_id, str(diff))
+            await update.effective_message.reply_text(f"Current timezone: {tz}, UTC diff: {diff}")
+        except:
+            await update.effective_message.reply_text("Usage: /timezone <Country/City>")
 
     async def alarm(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send the alarm message."""
