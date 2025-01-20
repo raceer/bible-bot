@@ -1,8 +1,15 @@
-import sqlite3
+import sqlite3, os 
 
 class DatabaseManager:
     def __init__(self, db_file):
-        self.db = sqlite3.connect(db_file)
+        directory = db_file[:db_file.rfind("/")]
+        try:
+            self.db = sqlite3.connect(db_file)
+        except sqlite3.OperationalError:
+            os.mkdir(directory)
+        finally:
+            self.db = sqlite3.connect(db_file)
+
         self.cursor = self.db.cursor()
 
         self.create_tables()
